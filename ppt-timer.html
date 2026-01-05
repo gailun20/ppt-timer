@@ -1,0 +1,536 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT计时器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-color, linear-gradient(135deg, #1a1a2e 0%, #16213e 100%));
+            color: white;
+            padding: 20px;
+        }
+
+        /* 主题样式 */
+        body.theme-dark { --bg-color: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        body.theme-light { --bg-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        body.theme-green { --bg-color: linear-gradient(135deg, #134e5e 0%, #71b280 100%); }
+        body.theme-red { --bg-color: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
+        body.theme-transparent { --bg-color: transparent; background: transparent; }
+
+        .container {
+            text-align: center;
+            max-width: 100%;
+        }
+
+        .meeting-title {
+            font-size: clamp(18px, 4vw, 28px);
+            font-weight: 600;
+            margin-bottom: 10px;
+            opacity: 0.9;
+            min-height: 1.2em;
+        }
+
+        .timer-display {
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-size: clamp(60px, 20vw, 160px);
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-shadow: 0 0 40px rgba(255,255,255,0.3);
+            line-height: 1;
+            transition: color 0.3s;
+        }
+
+        .timer-display.warning { color: #fbbf24; }
+        .timer-display.danger { color: #ef4444; animation: blink 0.5s infinite; }
+
+        @keyframes blink {
+            50% { opacity: 0.5; }
+        }
+
+        .status {
+            font-size: clamp(14px, 3vw, 24px);
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 12px 28px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: clamp(14px, 2.5vw, 18px);
+            font-weight: 600;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.25);
+            transform: scale(1.05);
+        }
+
+        button.primary {
+            background: rgba(59, 130, 246, 0.8);
+            border-color: rgba(59, 130, 246, 0.9);
+        }
+
+        button.success {
+            background: rgba(34, 197, 94, 0.8);
+            border-color: rgba(34, 197, 94, 0.9);
+        }
+
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 14px;
+            max-width: 280px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 1000;
+        }
+
+        .settings-panel.hidden { display: none; }
+
+        .settings-panel h3 {
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        .setting-row label {
+            flex: 0 0 70px;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        .setting-row input[type="number"] {
+            width: 50px;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            text-align: center;
+        }
+
+        .setting-row input[type="text"] {
+            flex: 1;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .theme-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .theme-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid white;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .theme-btn:hover { transform: scale(1.15); }
+        .theme-btn.dark { background: linear-gradient(135deg, #1a1a2e, #16213e); }
+        .theme-btn.light { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .theme-btn.green { background: linear-gradient(135deg, #134e5e, #71b280); }
+        .theme-btn.red { background: linear-gradient(135deg, #cb2d3e, #ef473a); }
+        .theme-btn.transparent { background: repeating-conic-gradient(#ccc 0% 25%, white 0% 50%) 50%/16px 16px; }
+
+        .toggle-settings {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            z-index: 999;
+        }
+
+        .quick-times {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .quick-times button {
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 15px;
+        }
+
+        .mode-switch {
+            display: flex;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 3px;
+            margin-bottom: 12px;
+        }
+
+        .mode-switch button {
+            flex: 1;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 17px;
+            font-size: 12px;
+            background: transparent;
+        }
+
+        .mode-switch button.active {
+            background: rgba(59, 130, 246, 0.8);
+        }
+
+        /* 演示模式隐藏控制 */
+        body.presentation-mode .controls { display: none; }
+        body.presentation-mode .toggle-settings { opacity: 0.3; }
+        body.presentation-mode .toggle-settings:hover { opacity: 1; }
+    </style>
+</head>
+<body class="theme-dark">
+
+    <!-- 设置按钮 -->
+    <button class="toggle-settings" onclick="toggleSettings()">⚙️</button>
+
+    <!-- 设置面板 -->
+    <div id="settings" class="settings-panel hidden">
+        <h3>⚙️ 计时器设置</h3>
+        
+        <!-- 模式切换 -->
+        <div class="mode-switch">
+            <button id="btn-stopwatch" class="active" onclick="setMode('stopwatch')">正计时</button>
+            <button id="btn-countdown" onclick="setMode('countdown')">倒计时</button>
+        </div>
+
+        <!-- 倒计时设置 -->
+        <div id="countdown-config">
+            <div class="setting-row">
+                <label>时间</label>
+                <input type="number" id="hours" value="0" min="0" max="23">
+                <span>:</span>
+                <input type="number" id="minutes" value="30" min="0" max="59">
+                <span>:</span>
+                <input type="number" id="seconds" value="0" min="0" max="59">
+            </div>
+            <div class="setting-row">
+                <label>快捷</label>
+                <div class="quick-times">
+                    <button onclick="quickSet(15)">15分</button>
+                    <button onclick="quickSet(30)">30分</button>
+                    <button onclick="quickSet(45)">45分</button>
+                    <button onclick="quickSet(60)">1小时</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="setting-row">
+            <label>标题</label>
+            <input type="text" id="title-input" placeholder="会议名称" oninput="updateTitle()">
+        </div>
+
+        <div class="setting-row">
+            <label>主题</label>
+            <div class="theme-buttons">
+                <div class="theme-btn dark" onclick="setTheme('dark')"></div>
+                <div class="theme-btn light" onclick="setTheme('light')"></div>
+                <div class="theme-btn green" onclick="setTheme('green')"></div>
+                <div class="theme-btn red" onclick="setTheme('red')"></div>
+                <div class="theme-btn transparent" onclick="setTheme('transparent')"></div>
+            </div>
+        </div>
+
+        <div class="setting-row">
+            <label></label>
+            <button onclick="togglePresentationMode()" style="flex:1; font-size:12px;">
+                🎬 演示模式（隐藏按钮）
+            </button>
+        </div>
+    </div>
+
+    <!-- 主显示区 -->
+    <div class="container">
+        <div class="meeting-title" id="meeting-title"></div>
+        <div class="timer-display" id="timer">00:00:00</div>
+        <div class="status" id="status">准备开始</div>
+        
+        <div class="controls">
+            <button onclick="reset()">🔄 重置</button>
+            <button class="primary" onclick="toggle()" id="toggle-btn">▶️ 开始</button>
+            <button class="success" onclick="addMinute()" id="add-btn" style="display:none;">+1 分钟</button>
+        </div>
+    </div>
+
+    <script>
+        // 状态
+        let mode = 'stopwatch';
+        let running = false;
+        let elapsed = 0;
+        let total = 1800;
+        let remaining = 1800;
+        let timer = null;
+
+        // 元素
+        const timerEl = document.getElementById('timer');
+        const statusEl = document.getElementById('status');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const addBtn = document.getElementById('add-btn');
+
+        // 格式化时间
+        function fmt(s) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return [h, m, sec].map(v => String(v).padStart(2, '0')).join(':');
+        }
+
+        // 更新显示
+        function update(time, stat) {
+            timerEl.textContent = time;
+            if (stat) statusEl.textContent = stat;
+            
+            // 警告颜色
+            timerEl.classList.remove('warning', 'danger');
+            if (mode === 'countdown' && running) {
+                if (remaining <= 60 && remaining > 0) timerEl.classList.add('warning');
+                if (remaining <= 0) timerEl.classList.add('danger');
+            }
+        }
+
+        // 设置模式
+        function setMode(m) {
+            if (running) return;
+            mode = m;
+            document.getElementById('btn-stopwatch').classList.toggle('active', m === 'stopwatch');
+            document.getElementById('btn-countdown').classList.toggle('active', m === 'countdown');
+            document.getElementById('countdown-config').style.display = m === 'countdown' ? 'block' : 'none';
+            addBtn.style.display = m === 'countdown' ? 'inline-block' : 'none';
+            reset();
+        }
+
+        // 读取设置的时间
+        function getSetTime() {
+            const h = parseInt(document.getElementById('hours').value) || 0;
+            const m = parseInt(document.getElementById('minutes').value) || 0;
+            const s = parseInt(document.getElementById('seconds').value) || 0;
+            return h * 3600 + m * 60 + s;
+        }
+
+        // 快捷设置
+        function quickSet(min) {
+            document.getElementById('hours').value = Math.floor(min / 60);
+            document.getElementById('minutes').value = min % 60;
+            document.getElementById('seconds').value = 0;
+            if (!running) {
+                total = min * 60;
+                remaining = total;
+                update(fmt(remaining), '准备开始');
+            }
+        }
+
+        // 开始/暂停
+        function toggle() {
+            running ? pause() : start();
+        }
+
+        // 开始
+        function start() {
+            if (mode === 'countdown') {
+                if (!running) {
+                    total = getSetTime();
+                    remaining = total;
+                }
+                if (remaining <= 0) return;
+            }
+
+            running = true;
+            toggleBtn.textContent = '⏸️ 暂停';
+            update(null, '计时中...');
+
+            timer = setInterval(() => {
+                if (mode === 'stopwatch') {
+                    elapsed++;
+                    update(fmt(elapsed));
+                } else {
+                    remaining--;
+                    update(fmt(remaining));
+                    if (remaining <= 0) {
+                        pause();
+                        update('00:00:00', '⏰ 时间到！');
+                        playSound();
+                    }
+                }
+            }, 1000);
+        }
+
+        // 暂停
+        function pause() {
+            running = false;
+            clearInterval(timer);
+            toggleBtn.textContent = '▶️ 继续';
+            update(null, '已暂停');
+        }
+
+        // 重置
+        function reset() {
+            pause();
+            elapsed = 0;
+            timerEl.classList.remove('warning', 'danger');
+            toggleBtn.textContent = '▶️ 开始';
+            
+            if (mode === 'stopwatch') {
+                update('00:00:00', '准备开始');
+            } else {
+                total = getSetTime();
+                remaining = total;
+                update(fmt(remaining), '准备开始');
+            }
+        }
+
+        // 加一分钟
+        function addMinute() {
+            if (mode === 'countdown') {
+                remaining += 60;
+                total += 60;
+                update(fmt(remaining));
+            }
+        }
+
+        // 播放声音
+        function playSound() {
+            try {
+                const ctx = new AudioContext();
+                [0, 250, 500].forEach(d => {
+                    setTimeout(() => {
+                        const o = ctx.createOscillator();
+                        const g = ctx.createGain();
+                        o.connect(g);
+                        g.connect(ctx.destination);
+                        o.frequency.value = 880;
+                        g.gain.value = 0.3;
+                        o.start();
+                        setTimeout(() => o.stop(), 150);
+                    }, d);
+                });
+            } catch(e) {}
+        }
+
+        // 设置面板
+        function toggleSettings() {
+            document.getElementById('settings').classList.toggle('hidden');
+        }
+
+        // 主题
+        function setTheme(t) {
+            document.body.className = 'theme-' + t;
+        }
+
+        // 标题
+        function updateTitle() {
+            document.getElementById('meeting-title').textContent = document.getElementById('title-input').value;
+        }
+
+        // 演示模式
+        function togglePresentationMode() {
+            document.body.classList.toggle('presentation-mode');
+            document.getElementById('settings').classList.add('hidden');
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.code === 'Space') { e.preventDefault(); toggle(); }
+            if (e.code === 'KeyR') reset();
+            if (e.code === 'Escape') toggleSettings();
+        });
+
+        // 监听时间输入
+        ['hours', 'minutes', 'seconds'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                if (!running && mode === 'countdown') {
+                    total = getSetTime();
+                    remaining = total;
+                    update(fmt(remaining));
+                }
+            });
+        });
+
+        // URL参数支持（方便嵌入时预设）
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('theme')) setTheme(params.get('theme'));
+        if (params.get('title')) {
+            document.getElementById('title-input').value = params.get('title');
+            updateTitle();
+        }
+        if (params.get('minutes')) quickSet(parseInt(params.get('minutes')));
+        if (params.get('mode') === 'countdown') setMode('countdown');
+        if (params.get('presentation') === '1') document.body.classList.add('presentation-mode');
+        if (params.get('autostart') === '1') setTimeout(start, 1000);
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>
